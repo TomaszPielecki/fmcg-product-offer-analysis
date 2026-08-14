@@ -1,0 +1,25 @@
+# Local Codex/project metadata
+.agents/
+.codex/
+
+# Power BI working files (kept locally)
+*.pbix
+*.pbit
+*.pbids
+
+# Full source dataset (contains detailed product, stock and price data)
+database/00_create_database_and_load_data.sql
+
+# Internal working notes
+docs/chatgpt_context.md
+docs/powerbi_project_review_and_todo.md
+
+# Final narrative is published after the dashboard has been validated
+docs/final_insights.md
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+~$*
