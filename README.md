@@ -1,5 +1,7 @@
 # FMCG | Analiza oferty i widoczności zapasu
 
+> FMCG product offer, inventory coverage and data-quality dashboard built with R Shiny, Quarto, SQL Server Express and T-SQL.
+
 Projekt analityczny dla branży FMCG: łączy bazę SQL Server, dashboard w R Shiny i raport Quarto, aby pokazać stan katalogu, dostępność produktów, ceny oraz jakość danych.
 
 > **Wynik analizy:** w badanym zbiorze jest 2 910 produktów, a dla 962 (33,1%) nie zapisano ilości. Brak ilości oznacza stan nieznany, a nie zero. Baza nie zawiera historii sprzedaży ani kosztów zakupu, dlatego nie pozwala policzyć marży, rotacji ani rzeczywistego zysku.
