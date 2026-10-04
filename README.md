@@ -11,6 +11,16 @@ Projekt analityczny dla branży FMCG: łączy bazę SQL Server, dashboard w R Sh
 - **Raport zarządczy** — interpretacja wyników i zalecane kolejne kroki: [przejdź do raportu](docs/raport_zarzadczy.md).
 - **SQL** — skrypty schematu, widoków analitycznych, kontroli jakości i rozszerzonego modelu danych w katalogu [`database/`](database/).
 
+## Podgląd aplikacji
+
+### Shiny
+
+![Dashboard Shiny](screenshots/shiny-dashboard.jpg)
+
+### Quarto
+
+![Dashboard Quarto](screenshots/quarto-dashboard.jpg)
+
 ## KPI w dashboardzie
 
 Dashboard pokazuje bieżący obraz dostępnego wyciągu:

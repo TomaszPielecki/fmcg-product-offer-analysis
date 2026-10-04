@@ -145,6 +145,18 @@ stock_labels <- c(
   "No stock data" = "Brak danych",
   "Invalid stock" = "Nieprawidłowa wartość"
 )
+group_labels <- c(
+  "Beer" = "Piwo",
+  "Water" = "Woda",
+  "Bars and sweets" = "Batoniki i słodycze",
+  "Chocolate and gifts" = "Czekolada i upominki",
+  "Snacks" = "Przekąski",
+  "Instant and canned food" = "Dania instant i konserwy",
+  "Cheese" = "Sery",
+  "Syrups" = "Syropy",
+  "Breakfast and preserves" = "Śniadaniowe i przetwory",
+  "Other" = "Inne"
+)
 stock_colors <- c(
   "Na stanie" = "#198754",
   "Niski stan" = "#f0ad4e",
@@ -157,8 +169,12 @@ stock_counts <- as.data.frame(
 )
 names(stock_counts) <- c("Status", "Liczba produktów")
 stock_counts$Status <- unname(stock_labels[as.character(stock_counts$Status)])
+stock_counts <- stock_counts[stock_counts$`Liczba produktów` > 0, , drop = FALSE]
+stock_counts <- stock_counts[order(stock_counts$`Liczba produktów`), , drop = FALSE]
 
-group_names <- offer$InferredProductGroup
+source_group_names <- as.character(offer$InferredProductGroup)
+group_names <- unname(group_labels[source_group_names])
+group_names[is.na(group_names)] <- source_group_names[is.na(group_names)]
 group_names[is.na(group_names) | group_names == ""] <- "Nieznana grupa"
 stock_value_by_group <- stats::aggregate(
   offer$StockValueGross,
@@ -245,7 +261,7 @@ paste0(format(round(total_gross_stock_value, 0), big.mark = " ", decimal.mark = 
 stock_plot <- plotly::plot_ly(
   stock_counts,
   x = ~`Liczba produktów`,
-  y = ~stats::reorder(Status, `Liczba produktów`),
+  y = ~Status,
   type = "bar",
   orientation = "h",
   marker = list(color = unname(stock_colors[as.character(stock_counts$Status)])),
@@ -254,9 +270,11 @@ stock_plot <- plotly::plot_ly(
   hovertemplate = "%{y}<br>%{x} produktów<extra></extra>"
 )
 plotly::layout(stock_plot,
-  xaxis = list(title = NULL, rangemode = "tozero", gridcolor = "#e9eef5"),
-  yaxis = list(title = NULL), showlegend = FALSE,
-  margin = list(l = 125, r = 35, t = 20, b = 35),
+  xaxis = list(title = "Liczba produktów", rangemode = "tozero", gridcolor = "#e9eef5",
+    range = c(0, max(stock_counts$`Liczba produktów`) * 1.14)),
+  yaxis = list(title = "", categoryorder = "array", categoryarray = stock_counts$Status),
+  showlegend = FALSE,
+  margin = list(l = 135, r = 30, t = 20, b = 50),
   paper_bgcolor = "transparent", plot_bgcolor = "transparent"
 )
 ```
@@ -268,15 +286,16 @@ plotly::layout(stock_plot,
 group_plot <- plotly::plot_ly(
   stock_value_by_group,
   x = ~`Wartość brutto stanu (PLN)`,
-  y = ~stats::reorder(Grupa, `Wartość brutto stanu (PLN)`),
+  y = ~Grupa,
   type = "bar", orientation = "h",
   marker = list(color = "#2878b5"),
   hovertemplate = "%{y}<br>%{x:,.2f} zł<extra></extra>"
 )
 plotly::layout(group_plot,
-  xaxis = list(title = "Wartość brutto (zł)", tickformat = ",.0f", gridcolor = "#e9eef5"),
-  yaxis = list(title = NULL),
-  margin = list(l = 155, r = 25, t = 20, b = 45),
+  xaxis = list(title = "Wartość brutto (zł)", tickformat = ",.0f", gridcolor = "#e9eef5",
+    range = c(0, max(stock_value_by_group[["Wartość brutto stanu (PLN)"]]) * 1.12)),
+  yaxis = list(title = "", categoryorder = "array", categoryarray = stock_value_by_group$Grupa),
+  margin = list(l = 185, r = 25, t = 20, b = 50),
   paper_bgcolor = "transparent", plot_bgcolor = "transparent"
 )
 ```
@@ -392,14 +411,15 @@ paste(sort(unique(stocked$UnitOfMeasure)), collapse = " · ")
 quantity_plot <- plotly::plot_ly(
   top_piece_stocks,
   x = ~StockQty,
-  y = ~stats::reorder(ProductName, StockQty),
+  y = ~ProductName,
   type = "bar", orientation = "h",
   marker = list(color = "#3478c7"),
   hovertemplate = "%{y}<br>%{x:,.0f} szt.<extra></extra>"
 )
 plotly::layout(quantity_plot,
   xaxis = list(title = "Stan (szt.)", tickformat = ",.0f", rangemode = "tozero", gridcolor = "#e9eef5"),
-  yaxis = list(title = NULL), margin = list(l = 240, r = 35, t = 20, b = 45),
+  yaxis = list(title = "", categoryorder = "array", categoryarray = rev(top_piece_stocks$ProductName)),
+  margin = list(l = 240, r = 35, t = 20, b = 45),
   paper_bgcolor = "transparent", plot_bgcolor = "transparent"
 )
 ```
