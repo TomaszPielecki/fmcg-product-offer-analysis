@@ -19,6 +19,8 @@ Projekt analizuje ofertę produktową FMCG pod kątem dostępności, jakości ew
 
 ### Najważniejsze obserwacje
 
+**Okres danych źródłowych: 2025 r.** Data „Odświeżono” w aplikacji oznacza moment odczytu danych przez dashboard, a nie datę, której dotyczą rekordy.
+
 | Wskaźnik | Wynik z analizowanego wyciągu |
 |---|---:|
 | Produkty w ofercie | **2 910** |
@@ -115,4 +117,3 @@ Więcej o interpretacji wyników: [raport zarządczy](docs/raport_zarzadczy.md).
 - Dane sprzedażowe i koszty zakupu są potrzebne do obliczenia marży, rotacji, dni zapasu oraz wyniku według produktu.
 - Pełny zestaw danych źródłowych i wyrenderowany HTML pozostają lokalne; nie są częścią repozytorium.
 - `database/00_create_database_and_load_data.sql` usuwa i odtwarza tabelę `dbo.Oferta`. Nie uruchamiaj go na bazie z danymi, które chcesz zachować.
-
