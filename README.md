@@ -1,77 +1,118 @@
+<div align="center">
+
 # FMCG | Analiza oferty i widoczności zapasu
 
-> FMCG product offer, inventory coverage and data-quality dashboard built with R Shiny, Quarto, SQL Server Express and T-SQL.
+**FMCG product offer, inventory coverage and data-quality dashboard built with R Shiny, Quarto, SQL Server Express and T-SQL.**
 
-Projekt analityczny dla branży FMCG: łączy bazę SQL Server, dashboard w R Shiny i raport Quarto, aby pokazać stan katalogu, dostępność produktów, ceny oraz jakość danych.
+<img src="https://img.shields.io/badge/R-Shiny-276DC3?logo=r&logoColor=white" alt="R Shiny">
+<img src="https://img.shields.io/badge/Quarto-Report-75AADB?logo=quarto&logoColor=white" alt="Quarto">
+<img src="https://img.shields.io/badge/Microsoft-SQL%20Server%20Express-CC2927?logo=microsoftsqlserver&logoColor=white" alt="Microsoft SQL Server Express">
+<img src="https://img.shields.io/badge/Focus-Data%20quality-168C83" alt="Data quality">
 
-> **Wynik analizy:** w badanym zbiorze jest 2 910 produktów, a dla 962 (33,1%) nie zapisano ilości. Brak ilości oznacza stan nieznany, a nie zero. Baza nie zawiera historii sprzedaży ani kosztów zakupu, dlatego nie pozwala policzyć marży, rotacji ani rzeczywistego zysku.
+**Dwa osobne interfejsy, jedno źródło danych:** interaktywny dashboard Shiny oraz raport Quarto renderowany do HTML.
 
-## Co znajdziesz w projekcie
+</div>
 
-- **Dashboard Shiny** — osiem wskaźników, wykres dostępności, rozkład cen, szacowana wartość zapasu według grup, wyszukiwany katalog i kontrola jakości danych.
-- **Raport Quarto** — źródło raportu z analizą cen, zapasu, jakości ewidencji i ograniczeń danych: [otwórz plik Quarto](oferta_dashboard.qmd). Wyrenderowany plik HTML pozostaje lokalny, ponieważ zawiera szczegółowe dane oferty.
-- **Raport zarządczy** — interpretacja wyników i zalecane kolejne kroki: [przejdź do raportu](docs/raport_zarzadczy.md).
-- **SQL** — skrypty schematu, widoków analitycznych, kontroli jakości i rozszerzonego modelu danych w katalogu [`database/`](database/).
+## O projekcie
 
-## Podgląd aplikacji
+Projekt analizuje ofertę produktową FMCG pod kątem dostępności, jakości ewidencji, cen oraz orientacyjnej wartości znanych stanów. Łączy bazę Microsoft SQL Server Express z aplikacją R Shiny i raportem Quarto.
+
+### Najważniejsze obserwacje
+
+| Wskaźnik | Wynik z analizowanego wyciągu |
+|---|---:|
+| Produkty w ofercie | **2 910** |
+| Brak zapisanej ilości | **962 (33,1%)** |
+| Dodatni stan | **1 729 (59,4%)** |
+| Niski stan według progu widoku | **219** |
+| Szacunkowa wartość brutto znanego zapasu | **3 095 717 zł** |
+| Udział grupy „Inne” w wartości zapasu | **72,7%** |
+
+> **Zakres wniosku:** to pojedynczy obraz oferty. Brak ilości oznacza brak danych, nie potwierdzony stan zerowy. Wartość zapasu jest szacunkiem `ilość × cena brutto z oferty` — nie jest kosztem, przychodem ani zyskiem. Bez sprzedaży, kosztów zakupu i historii stanów nie da się rzetelnie obliczyć marży, rotacji ani strat firmy.
+
+Grupy produktów są wnioskowane z nazw, dlatego wysoki udział „Inne” wskazuje przede wszystkim na potrzebę poprawy klasyfikacji. Próg niskiego stanu `<10` jest wspólny dla różnych jednostek i służy jako sygnał do sprawdzenia, nie jako rekomendacja zamówienia.
+
+## Podgląd
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Shiny · eksploracja i interakcje</strong><br>
+      <a href="screenshots/shiny-dashboard.jpg"><img src="screenshots/shiny-dashboard.jpg" alt="Zrzut dashboardu Shiny" height="560"></a>
+    </td>
+    <td align="center" width="50%">
+      <strong>Quarto · raport i narracja</strong><br>
+      <a href="screenshots/quarto-dashboard.jpg"><img src="screenshots/quarto-dashboard.jpg" alt="Zrzut raportu Quarto" height="560"></a>
+    </td>
+  </tr>
+</table>
+
+## Jak działa
+
+```mermaid
+flowchart LR
+    DB[(SQL Server Express<br/>tomawebp_oferta)] --> V[Widoki analityczne i jakości danych]
+    V --> S[Shiny<br/>interaktywna eksploracja]
+    V --> Q[Quarto<br/>raport HTML]
+```
+
+| Warstwa | Technologie | Rola |
+|---|---|---|
+| Baza danych | SQL Server Express, T-SQL | Dane oferty, widoki analityczne i reguły kontroli jakości |
+| Aplikacja | R Shiny, Plotly, DT, bslib | Przegląd KPI, eksploracja katalogu i kontrola jakości |
+| Raport | Quarto, R, Plotly | Renderowany raport HTML z interpretacją i ograniczeniami danych |
+| Połączenie | DBI, ODBC Driver 18 | Odczyt danych z lokalnej bazy |
+
+Shiny i Quarto są osobnymi aplikacjami. Mogą inaczej prezentować i udostępniać dane, zachowując wspólne źródło oraz znaczenie głównych miar.
+
+## Uruchomienie
+
+### Wymagania
+
+- R oraz Quarto
+- Microsoft SQL Server Express i ODBC Driver 18 for SQL Server
+- Lokalna, autoryzowana baza `tomawebp_oferta` z widokami `dbo.vw_Oferta_Analytics` i `dbo.vw_Oferta_DataQualityIssues`
+
+Domyślne połączenie używa `localhost\\SQLEXPRESS` i uwierzytelniania Windows. Można je zmienić zmiennymi środowiskowymi `MSSQL_SERVER`, `MSSQL_DATABASE` i `MSSQL_DRIVER`.
 
 ### Shiny
 
-![Dashboard Shiny](screenshots/shiny-dashboard.jpg)
-
-### Quarto
-
-![Dashboard Quarto](screenshots/quarto-dashboard.jpg)
-
-## KPI w dashboardzie
-
-Dashboard pokazuje bieżący obraz dostępnego wyciągu:
-
-| Obszar | Wskaźniki |
-|---|---|
-| Katalog i stany | Liczba produktów, pokrycie stanów, produkty na stanie, niski lub zerowy stan, pozycje bez danych o stanie |
-| Ceny i wycena orientacyjna | Mediana ceny brutto, szacowana wartość znanego zapasu |
-| Klasyfikacja | Udział grupy „Inne” w szacowanej wartości zapasu |
-| Jakość | Niezgodności ceny brutto z wyliczeniem na podstawie ceny netto i VAT oraz lista innych wykrytych problemów |
-
-### Jakich KPI brakuje do oceny wyniku firmy?
-
-Marża brutto według produktu, rotacja i dni zapasu oraz dostępność w dniach z popytem wymagają danych, których obecnie nie ma: transakcji sprzedaży, kosztów zakupu i historii stanów z datami. Nie zastępujemy ich ceną brutto ani wartością zapasu — te miary nie mówią, ile firma zarobiła. Priorytety uzupełnienia danych i definicje KPI opisuje [raport zarządczy](docs/raport_zarzadczy.md).
-
-## Uruchomienie aplikacji
-
-Wymagania: R, sterownik ODBC Driver 18 for SQL Server, lokalna baza `tomawebp_oferta` z widokami analitycznymi oraz pakiety R: `shiny`, `bslib`, `DBI`, `odbc`, `plotly` i `DT`.
-
-Z głównego katalogu projektu:
+Z głównego katalogu repozytorium:
 
 ```r
 install.packages(c("shiny", "bslib", "DBI", "odbc", "plotly", "DT"))
 shiny::runApp("shiny")
 ```
 
-Domyślnie aplikacja łączy się z `localhost\\SQLEXPRESS`, używając uwierzytelniania Windows. Połączenie można skonfigurować zmiennymi środowiskowymi `MSSQL_SERVER`, `MSSQL_DATABASE` i `MSSQL_DRIVER`.
+### Quarto
 
-## Renderowanie raportu
-
-Wymagane są Quarto, R oraz pakiety `knitr`, `DBI`, `odbc`, `plotly` i `DT`.
+```r
+install.packages(c("knitr", "rmarkdown", "DBI", "odbc", "plotly", "DT"))
+```
 
 ```sh
 quarto render oferta_dashboard.qmd
 ```
 
-Raport i aplikacja odczytują widok `dbo.vw_Oferta_Analytics`; kontrola jakości korzysta z `dbo.vw_Oferta_DataQualityIssues`.
+## Struktura projektu
 
-## Dane i ograniczenia interpretacji
+```text
+database/                 schemat bazy, widoki i skrypty SQL
+docs/                     raport zarządczy i opis wniosków
+screenshots/              podglądy Shiny i Quarto
+shiny/                    aplikacja R Shiny
+oferta_dashboard.qmd      źródło raportu Quarto
+styles.css                styl raportu Quarto
+```
 
-- Ilość pochodzi z `dbo.Oferta.stan`. Pusta wartość oznacza **brak danych**, nie potwierdzony stan zerowy.
-- Jednostki `kg`, `op` i `szt` należy analizować osobno.
-- Wartość zapasu to szacunek `ilość × cena brutto z oferty`; nie jest kosztem magazynowym, przychodem ani zyskiem.
-- Grupy produktów są wnioskowane z nazw. Duży udział „Inne” wskazuje na potrzebę poprawy klasyfikacji.
-- Historia stanów i sprzedaż są obecnie puste. Historia prezentowana w raporcie Quarto jest wyłącznie symulacją i nie opisuje działalności firmy.
-- Próg niskiego stanu 10 jednostek jest wspólny dla różnych miar i powinien być traktowany jako sygnał do przeglądu, nie gotowa rekomendacja zamówienia.
+Więcej o interpretacji wyników: [raport zarządczy](docs/raport_zarzadczy.md).
 
-> **Uwaga:** `database/00_create_database_and_load_data.sql` usuwa i odtwarza tabelę `dbo.Oferta`. Nie uruchamiaj go na bazie z danymi, które chcesz zachować.
+## Granice analizy i prywatność
 
-## Publikacja i prywatność danych
+- Brak ilości, zero i nieprawidłowa ilość to różne stany danych.
+- Jednostki `kg`, `op` i `szt` wymagają osobnej interpretacji.
+- Historia stanów w bazie jest obecnie pusta. Wykres demonstracyjny w Quarto jest oznaczony jako symulacja i nie opisuje działalności firmy.
+- Dane sprzedażowe i koszty zakupu są potrzebne do obliczenia marży, rotacji, dni zapasu oraz wyniku według produktu.
+- Pełny zestaw danych źródłowych i wyrenderowany HTML pozostają lokalne; nie są częścią repozytorium.
+- `database/00_create_database_and_load_data.sql` usuwa i odtwarza tabelę `dbo.Oferta`. Nie uruchamiaj go na bazie z danymi, które chcesz zachować.
 
-Repozytorium zawiera kod i opis analizy, ale nie pełny zestaw źródłowy. Skrypt z 2 910 wierszami nazw produktów, cen i stanów (`database/00_create_database_and_load_data.sql`) oraz wyrenderowany raport HTML pozostają lokalne. Nie publikuj ich w publicznym repozytorium. Dashboard łączy się z lokalną bazą; przed uruchomieniem przygotuj własny, autoryzowany zbiór danych.
