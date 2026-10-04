@@ -1,0 +1,197 @@
+/* Portfolio: jasny interfejs, wyraźna hierarchia i spokojne wykresy. */
+:root {
+  --bs-primary: #2457a7;
+  --bs-body-bg: #f4f7fb;
+  --bs-body-color: #172b4d;
+}
+
+body {
+  background: #f4f7fb;
+  color: #172b4d;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+.quarto-dashboard {
+  background: #f4f7fb;
+}
+
+.quarto-dashboard .navbar {
+  min-height: 62px;
+  background: #fff;
+  border-bottom: 1px solid #e6ebf2;
+  box-shadow: 0 3px 16px rgba(16, 40, 75, .06);
+}
+
+.navbar-title-text a {
+  color: #172b4d;
+  font-weight: 750;
+  letter-spacing: -.035em;
+}
+
+.navbar-author {
+  color: #64748b;
+  font-size: .78rem;
+}
+
+.navbar-nav .nav-link {
+  margin: .45rem .2rem;
+  padding: .55rem .85rem;
+  border-radius: 9px;
+  color: #53657d;
+  font-weight: 650;
+}
+
+.navbar-nav .nav-link.active {
+  color: #fff;
+  background: #2457a7;
+}
+
+.navbar-brand, h1, h2, h3 {
+  letter-spacing: -.025em;
+  font-weight: 700;
+}
+
+.dashboard-page {
+  padding-top: 1.25rem;
+}
+
+.quarto-dashboard .card,
+.quarto-dashboard .bslib-card {
+  border: 1px solid #e6ebf2;
+  border-radius: 16px;
+  box-shadow: 0 5px 20px rgba(24, 53, 93, .055);
+}
+
+.quarto-dashboard .card-header {
+  background: #fff;
+  border: 0;
+  padding: 1.05rem 1.25rem .45rem;
+  color: #172b4d;
+  font-weight: 700;
+}
+
+.quarto-dashboard .bslib-value-box {
+  min-height: 126px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 7px 20px rgba(24, 53, 93, .09);
+}
+
+.quarto-dashboard .value-box-title {
+  font-size: .86rem;
+  font-weight: 600;
+  opacity: .9;
+}
+
+.quarto-dashboard .value-box-value {
+  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  font-weight: 750;
+  letter-spacing: -.04em;
+}
+
+.history-empty {
+  display: flex;
+  height: 100%;
+  min-height: 260px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.5rem;
+  border: 1px solid #dce7f5;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f8fbff, #edf4fc);
+  color: #334155;
+}
+
+.history-empty h2,
+.history-empty h3 {
+  margin: .6rem 0;
+  color: #172b4d;
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.history-empty p {
+  margin: .35rem 0;
+  line-height: 1.55;
+}
+
+.history-empty-icon {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 12px;
+  background: #dceaff;
+  color: #2457a7;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.history-meta {
+  color: #64748b;
+  font-size: .88rem;
+}
+
+.insight-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+}
+
+.insight-item {
+  padding: 1rem 1.1rem;
+  border: 1px solid #e6ebf2;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.insight-label {
+  margin-bottom: .45rem;
+  color: #2457a7;
+  font-size: .75rem;
+  font-weight: 750;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.insight-item p {
+  margin: 0;
+  color: #42536a;
+  line-height: 1.55;
+}
+
+.insight-item strong {
+  color: #172b4d;
+}
+
+.insight-caveat {
+  background: #f8fbff;
+}
+
+blockquote {
+  padding: .8rem 1rem;
+  border-left: 4px solid #3478c7;
+  border-radius: 0 10px 10px 0;
+  background: #eaf1fa;
+  color: #334155;
+}
+
+table.dataTable thead th {
+  color: #475569;
+  font-size: .78rem;
+  text-transform: uppercase;
+}
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  border: 1px solid #d8e1ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .navbar-nav .nav-link { padding: .45rem .6rem; }
+  .quarto-dashboard .bslib-value-box { min-height: 108px; }
+  .insight-summary { grid-template-columns: 1fr; }
+}

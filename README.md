@@ -1,110 +1,65 @@
-# FMCG Product Offer & Pricing Analysis
+# FMCG | Analiza oferty i widoczności zapasu
 
-SQL Server and Power BI portfolio project focused on product availability, pricing structure, VAT validation, alternative price lists and data quality in an FMCG offer.
+Projekt analityczny dla branży FMCG: łączy bazę SQL Server, dashboard w R Shiny i raport Quarto, aby pokazać stan katalogu, dostępność produktów, ceny oraz jakość danych.
 
-## Project overview
+> **Wynik analizy:** w badanym zbiorze jest 2 910 produktów, a dla 962 (33,1%) nie zapisano ilości. Brak ilości oznacza stan nieznany, a nie zero. Baza nie zawiera historii sprzedaży ani kosztów zakupu, dlatego nie pozwala policzyć marży, rotacji ani rzeczywistego zysku.
 
-The analysis was developed against a snapshot containing 2,910 product records. It demonstrates a complete BI workflow: source profiling, reusable SQL transformations, business KPI definitions and a three-page Power BI dashboard specification.
+## Co znajdziesz w projekcie
 
-The public repository intentionally contains the database schema and analytical logic, but not the full source dataset or the Power BI working file. Detailed product prices and stock quantities remain local.
+- **Dashboard Shiny** — osiem wskaźników, wykres dostępności, rozkład cen, szacowana wartość zapasu według grup, wyszukiwany katalog i kontrola jakości danych.
+- **Raport Quarto** — źródło raportu z analizą cen, zapasu, jakości ewidencji i ograniczeń danych: [otwórz plik Quarto](oferta_dashboard.qmd). Wyrenderowany plik HTML pozostaje lokalny, ponieważ zawiera szczegółowe dane oferty.
+- **Raport zarządczy** — interpretacja wyników i zalecane kolejne kroki: [przejdź do raportu](docs/raport_zarzadczy.md).
+- **SQL** — skrypty schematu, widoków analitycznych, kontroli jakości i rozszerzonego modelu danych w katalogu [`database/`](database/).
 
-## Business questions
+## KPI w dashboardzie
 
-- How large is the product offer and how is it structured?
-- Which products are in stock, out of stock or missing stock information?
-- Which products have missing, zero or invalid prices?
-- Are gross prices consistent with net prices and VAT rates?
-- Which products use alternative price lists?
-- What data quality issues should be fixed first?
+Dashboard pokazuje bieżący obraz dostępnego wyciągu:
 
-## Tools and skills
+| Obszar | Wskaźniki |
+|---|---|
+| Katalog i stany | Liczba produktów, pokrycie stanów, produkty na stanie, niski lub zerowy stan, pozycje bez danych o stanie |
+| Ceny i wycena orientacyjna | Mediana ceny brutto, szacowana wartość znanego zapasu |
+| Klasyfikacja | Udział grupy „Inne” w szacowanej wartości zapasu |
+| Jakość | Niezgodności ceny brutto z wyliczeniem na podstawie ceny netto i VAT oraz lista innych wykrytych problemów |
 
-- SQL Server and SSMS
-- T-SQL data profiling and transformation
-- Data quality checks
-- DAX measure design
-- Power BI dashboard design
-- Git and GitHub documentation
+### Jakich KPI brakuje do oceny wyniku firmy?
 
-## Repository structure
+Marża brutto według produktu, rotacja i dni zapasu oraz dostępność w dniach z popytem wymagają danych, których obecnie nie ma: transakcji sprzedaży, kosztów zakupu i historii stanów z datami. Nie zastępujemy ich ceną brutto ani wartością zapasu — te miary nie mówią, ile firma zarobiła. Priorytety uzupełnienia danych i definicje KPI opisuje [raport zarządczy](docs/raport_zarzadczy.md).
 
-```text
-fmcg-product-offer-analysis/
-|-- database/
-|   |-- 00_create_database_schema.sql
-|   |-- 01_basic_checks.sql
-|   |-- 02_data_quality.sql
-|   |-- 03_pricing_analysis.sql
-|   |-- 04_vat_analysis.sql
-|   |-- 05_views_for_powerbi.sql
-|-- docs/
-|   |-- business_context.md
-|   |-- data_dictionary.md
-|   |-- kpi_definitions.md
-|   |-- linkedin_post.md
-|-- powerbi/
-|   |-- README_POWERBI.md
-|   |-- screenshots/
-|       |-- README.md
-|-- .gitignore
-|-- README.md
+## Uruchomienie aplikacji
+
+Wymagania: R, sterownik ODBC Driver 18 for SQL Server, lokalna baza `tomawebp_oferta` z widokami analitycznymi oraz pakiety R: `shiny`, `bslib`, `DBI`, `odbc`, `plotly` i `DT`.
+
+Z głównego katalogu projektu:
+
+```r
+install.packages(c("shiny", "bslib", "DBI", "odbc", "plotly", "DT"))
+shiny::runApp("shiny")
 ```
 
-## SQL workflow
+Domyślnie aplikacja łączy się z `localhost\\SQLEXPRESS`, używając uwierzytelniania Windows. Połączenie można skonfigurować zmiennymi środowiskowymi `MSSQL_SERVER`, `MSSQL_DATABASE` i `MSSQL_DRIVER`.
 
-1. Run [`database/00_create_database_schema.sql`](database/00_create_database_schema.sql) in SSMS.
-2. Load an authorized dataset into `dbo.Oferta` using the schema documented in [`docs/data_dictionary.md`](docs/data_dictionary.md).
-3. Run [`database/01_basic_checks.sql`](database/01_basic_checks.sql) to validate row counts and source fields.
-4. Run [`database/02_data_quality.sql`](database/02_data_quality.sql) to identify missing, duplicated or invalid values.
-5. Run [`database/03_pricing_analysis.sql`](database/03_pricing_analysis.sql) for standard and alternative price analysis.
-6. Run [`database/04_vat_analysis.sql`](database/04_vat_analysis.sql) to compare stored gross prices with calculated VAT values.
-7. Run [`database/05_views_for_powerbi.sql`](database/05_views_for_powerbi.sql) to create the reporting layer.
+## Renderowanie raportu
 
-> The original loader is excluded from the public repository because it contains detailed product, stock and price data. Use only data you are authorized to publish or process.
+Wymagane są Quarto, R oraz pakiety `knitr`, `DBI`, `odbc`, `plotly` i `DT`.
 
-## Reporting layer
+```sh
+quarto render oferta_dashboard.qmd
+```
 
-Power BI uses two SQL views:
+Raport i aplikacja odczytują widok `dbo.vw_Oferta_Analytics`; kontrola jakości korzysta z `dbo.vw_Oferta_DataQualityIssues`.
 
-- `dbo.vw_Oferta_Analytics` — cleaned product offer with reporting statuses, VAT validation, price bands and inferred product groups.
-- `dbo.vw_Oferta_DataQualityIssues` — prioritized records requiring data correction.
+## Dane i ograniczenia interpretacji
 
-The DAX definitions are available in [`docs/kpi_definitions.md`](docs/kpi_definitions.md). Keeping the measures as text makes the analytical logic reviewable without distributing the `.pbix` file.
+- Ilość pochodzi z `dbo.Oferta.stan`. Pusta wartość oznacza **brak danych**, nie potwierdzony stan zerowy.
+- Jednostki `kg`, `op` i `szt` należy analizować osobno.
+- Wartość zapasu to szacunek `ilość × cena brutto z oferty`; nie jest kosztem magazynowym, przychodem ani zyskiem.
+- Grupy produktów są wnioskowane z nazw. Duży udział „Inne” wskazuje na potrzebę poprawy klasyfikacji.
+- Historia stanów i sprzedaż są obecnie puste. Historia prezentowana w raporcie Quarto jest wyłącznie symulacją i nie opisuje działalności firmy.
+- Próg niskiego stanu 10 jednostek jest wspólny dla różnych miar i powinien być traktowany jako sygnał do przeglądu, nie gotowa rekomendacja zamówienia.
 
-## Dashboard pages
+> **Uwaga:** `database/00_create_database_and_load_data.sql` usuwa i odtwarza tabelę `dbo.Oferta`. Nie uruchamiaj go na bazie z danymi, które chcesz zachować.
 
-### 1. Overview
+## Publikacja i prywatność danych
 
-Offer size, stock availability, VAT structure, units of measure, product groups and the most expensive products.
-
-### 2. Pricing Analysis
-
-Standard and alternative prices, price bands, VAT price differences and pricing outliers.
-
-### 3. Data Quality
-
-Missing prices, missing stock, invalid VAT values and prioritized records requiring correction.
-
-Detailed build instructions are available in [`powerbi/README_POWERBI.md`](powerbi/README_POWERBI.md).
-
-## Dashboard screenshots
-
-The following exported report pages will be added after final Power BI validation:
-
-- `powerbi/screenshots/01_overview.png`
-- `powerbi/screenshots/02_pricing.png`
-- `powerbi/screenshots/03_data_quality.png`
-
-The `.pbix` file remains local; the screenshots and documented DAX provide the public portfolio preview.
-
-## Data limitations
-
-- The dataset is an offer snapshot rather than a sales fact table.
-- It does not contain revenue, units sold, margin, customers or suppliers.
-- Product groups are inferred from product names and are analytical approximations.
-- Stock quantities use different units of measure and should not be aggregated without context.
-- Stock and VAT source fields are stored as text and converted in the reporting view.
-
-## Portfolio value
-
-This project demonstrates practical SQL profiling, data quality design, price and VAT validation, reusable reporting views, KPI definition and the path from operational data to a Power BI dashboard.
+Repozytorium zawiera kod i opis analizy, ale nie pełny zestaw źródłowy. Skrypt z 2 910 wierszami nazw produktów, cen i stanów (`database/00_create_database_and_load_data.sql`) oraz wyrenderowany raport HTML pozostają lokalne. Nie publikuj ich w publicznym repozytorium. Dashboard łączy się z lokalną bazą; przed uruchomieniem przygotuj własny, autoryzowany zbiór danych.

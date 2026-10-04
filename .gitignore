@@ -9,6 +9,8 @@
 
 # Full source dataset (contains detailed product, stock and price data)
 database/00_create_database_and_load_data.sql
+oferta_dashboard.html
+oferta_dashboard_files/
 
 # Internal working notes
 docs/chatgpt_context.md

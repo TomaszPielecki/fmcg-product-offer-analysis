@@ -1,0 +1,318 @@
+---
+title: "Analiza oferty FMCG"
+subtitle: "Ceny, stany magazynowe i jakość danych"
+lang: pl-PL
+format:
+  dashboard:
+    theme: cosmo
+    orientation: columns
+    scrolling: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+Przed pierwszym uruchomieniem zainstaluj pakiety R w konsoli RStudio:
+
+```{r}
+#| eval: false
+install.packages(c("knitr", "DBI", "odbc", "plotly", "DT"))
+```
+
+## Dane
+
+```{r}
+required_packages <- c("knitr", "DBI", "odbc", "plotly", "DT")
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_packages) > 0) {
+  stop(
+    "Brakuje pakietów R: ",
+    paste(missing_packages, collapse = ", "),
+    ". Zainstaluj je poleceniem install.packages(c(",
+    paste(sprintf('"%s"', missing_packages), collapse = ", "),
+    ")).",
+    call. = FALSE
+  )
+}
+
+connection <- DBI::dbConnect(
+  odbc::odbc(),
+  Driver = Sys.getenv("MSSQL_DRIVER", "ODBC Driver 18 for SQL Server"),
+  Server = Sys.getenv("MSSQL_SERVER", "localhost\\SQLEXPRESS"),
+  Database = Sys.getenv("MSSQL_DATABASE", "tomawebp_oferta"),
+  Trusted_Connection = "Yes",
+  Encrypt = "Yes",
+  TrustServerCertificate = "Yes",
+  timeout = 10
+)
+
+data <- tryCatch(
+  {
+    offer <- DBI::dbGetQuery(
+      connection,
+      paste(
+        "SELECT id, ProductName, StockQty, UnitOfMeasure, VatRate,",
+        "NetPrice, GrossPrice, StockStatus, PriceStatus, VatStatus,",
+        "HasVatPriceMismatch, GrossPriceBand, GrossPriceBandSort,",
+        "InferredProductGroup, StockValueNet, StockValueGross",
+        "FROM dbo.vw_Oferta_Analytics"
+      )
+    )
+
+    issues <- DBI::dbGetQuery(
+      connection,
+      paste(
+        "SELECT id, ProductName, StockQty, UnitOfMeasure, VatRate,",
+        "NetPrice, GrossPrice, StockStatus, PriceStatus, VatStatus,",
+        "GrossPriceDifference, DataQualityIssue",
+        "FROM dbo.vw_Oferta_DataQualityIssues"
+      )
+    )
+
+    list(offer = offer, issues = issues)
+  },
+  finally = DBI::dbDisconnect(connection)
+)
+offer <- data$offer
+issues <- data$issues
+
+if (nrow(offer) == 0) {
+  stop("Widok dbo.vw_Oferta_Analytics nie zawiera produktów.", call. = FALSE)
+}
+
+total_products <- nrow(offer)
+products_with_stock <- sum(!is.na(offer$StockQty))
+products_without_stock <- sum(offer$StockStatus == "No stock data", na.rm = TRUE)
+total_gross_stock_value <- sum(offer$StockValueGross, na.rm = TRUE)
+vat_mismatches <- sum(offer$HasVatPriceMismatch, na.rm = TRUE)
+
+stock_order <- c(
+  "In stock",
+  "Low stock",
+  "Out of stock",
+  "No stock data",
+  "Invalid stock"
+)
+stock_colors <- c(
+  "In stock" = "#198754",
+  "Low stock" = "#f0ad4e",
+  "Out of stock" = "#dc3545",
+  "No stock data" = "#6c757d",
+  "Invalid stock" = "#6610f2"
+)
+stock_counts <- as.data.frame(
+  table(factor(offer$StockStatus, levels = stock_order), useNA = "no")
+)
+names(stock_counts) <- c("Status", "Liczba produktów")
+
+group_names <- offer$InferredProductGroup
+group_names[is.na(group_names) | group_names == ""] <- "Nieznana grupa"
+stock_value_by_group <- stats::aggregate(
+  offer$StockValueGross,
+  by = list(Grupa = group_names),
+  FUN = function(value) sum(value, na.rm = TRUE)
+)
+names(stock_value_by_group)[2] <- "Wartość brutto stanu (PLN)"
+stock_value_by_group <- stock_value_by_group[
+  order(stock_value_by_group[["Wartość brutto stanu (PLN)"]]),
+  ,
+  drop = FALSE
+]
+stock_value_by_group <- utils::tail(stock_value_by_group, 12)
+
+price_bands <- unique(offer[c("GrossPriceBand", "GrossPriceBandSort")])
+price_bands <- price_bands[
+  order(price_bands$GrossPriceBandSort),
+  ,
+  drop = FALSE
+]
+price_band_counts <- as.data.frame(
+  table(factor(offer$GrossPriceBand, levels = price_bands$GrossPriceBand))
+)
+names(price_band_counts) <- c("Przedział ceny brutto", "Liczba produktów")
+
+missing_stock <- offer[
+  !is.na(offer$StockStatus) & offer$StockStatus == "No stock data",
+  c("id", "ProductName", "UnitOfMeasure", "NetPrice", "GrossPrice"),
+  drop = FALSE
+]
+missing_stock <- missing_stock[
+  order(missing_stock$ProductName, na.last = TRUE),
+  ,
+  drop = FALSE
+]
+
+lowest_stock <- offer[!is.na(offer$StockQty), , drop = FALSE]
+lowest_stock <- lowest_stock[
+  order(lowest_stock$StockQty, lowest_stock$ProductName, na.last = TRUE),
+  c("id", "ProductName", "StockQty", "UnitOfMeasure", "GrossPrice", "StockStatus"),
+  drop = FALSE
+]
+lowest_stock <- utils::head(lowest_stock, 100)
+```
+
+# Podsumowanie
+
+## Row
+
+### Produkty w ofercie
+
+```{r}
+#| content: valuebox
+#| title: Liczba produktów
+#| color: primary
+total_products
+```
+
+### Produkty z podanym stanem
+
+```{r}
+#| content: valuebox
+#| title: Produkty z podanym stanem
+#| color: success
+products_with_stock
+```
+
+### Brak danych o stanie
+
+```{r}
+#| content: valuebox
+#| title: Produkty bez danych o stanie
+#| color: warning
+products_without_stock
+```
+
+### Wartość brutto magazynu
+
+```{r}
+#| content: valuebox
+#| title: Wartość znanego stanu
+#| color: info
+paste0(
+  format(round(total_gross_stock_value, 2), big.mark = " ", decimal.mark = ",", nsmall = 2),
+  " zł"
+)
+```
+
+## Row
+
+### Statusy magazynowe
+
+```{r}
+stock_plot <- plotly::plot_ly(
+  stock_counts,
+  x = ~Status,
+  y = ~`Liczba produktów`,
+  type = "bar",
+  marker = list(color = unname(stock_colors[as.character(stock_counts$Status)])),
+  hovertemplate = "%{x}<br>Produkty: %{y}<extra></extra>"
+)
+plotly::layout(
+  stock_plot,
+  xaxis = list(title = ""),
+  yaxis = list(title = "Liczba produktów"),
+  showlegend = FALSE
+)
+```
+
+### Wartość stanu według grup produktów
+
+```{r}
+group_plot <- plotly::plot_ly(
+  stock_value_by_group,
+  x = ~`Wartość brutto stanu (PLN)`,
+  y = ~stats::reorder(Grupa, `Wartość brutto stanu (PLN)`),
+  type = "bar",
+  orientation = "h",
+  marker = list(color = "#2878b5"),
+  hovertemplate = "%{y}<br>Wartość brutto: %{x:,.2f} zł<extra></extra>"
+)
+plotly::layout(
+  group_plot,
+  xaxis = list(title = "Wartość brutto (PLN)"),
+  yaxis = list(title = "")
+)
+```
+
+## Row
+
+### Przedziały cen brutto
+
+```{r}
+price_plot <- plotly::plot_ly(
+  price_band_counts,
+  x = ~`Przedział ceny brutto`,
+  y = ~`Liczba produktów`,
+  type = "bar",
+  marker = list(color = "#2878b5"),
+  hovertemplate = "%{x}<br>Produkty: %{y}<extra></extra>"
+)
+plotly::layout(
+  price_plot,
+  xaxis = list(title = "", tickangle = -25),
+  yaxis = list(title = "Liczba produktów")
+)
+```
+
+### Kontrola cen VAT
+
+```{r}
+#| content: valuebox
+#| title: Ceny brutto niezgodne z VAT
+#| color: danger
+vat_mismatches
+```
+
+# Jakość danych
+
+## Row
+
+### Problemy wykryte w widoku jakości danych
+
+```{r}
+if (nrow(issues) == 0) {
+  cat("Widok dbo.vw_Oferta_DataQualityIssues nie zwrócił problemów.")
+} else {
+  issues <- issues[
+    order(issues$DataQualityIssue, issues$ProductName, issues$id, na.last = TRUE),
+    ,
+    drop = FALSE
+  ]
+  DT::datatable(
+    issues,
+    rownames = FALSE,
+    filter = "top",
+    options = list(pageLength = 25, scrollX = TRUE)
+  )
+}
+```
+
+# Dane magazynowe
+
+## Row
+
+### Produkty bez danych o stanie
+
+```{r}
+DT::datatable(
+  missing_stock,
+  rownames = FALSE,
+  filter = "top",
+  options = list(pageLength = 25, scrollX = TRUE)
+)
+```
+
+### Produkty o najniższym stanie
+
+```{r}
+DT::datatable(
+  lowest_stock,
+  rownames = FALSE,
+  filter = "top",
+  options = list(pageLength = 25, scrollX = TRUE)
+)
+```

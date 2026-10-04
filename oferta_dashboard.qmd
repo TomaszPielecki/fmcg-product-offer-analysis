@@ -1,0 +1,502 @@
+---
+title: "FMCG | Oferta i magazyn"
+lang: pl-PL
+format:
+  dashboard:
+    theme: cosmo
+    orientation: rows
+    scrolling: true
+    css: styles.css
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| include: false
+required_packages <- c("knitr", "DBI", "odbc", "plotly", "DT")
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_packages) > 0) {
+  stop(
+    "Brakuje pakietów R: ",
+    paste(missing_packages, collapse = ", "),
+    ". Zainstaluj je poleceniem install.packages(c(",
+    paste(sprintf('\"%s\"', missing_packages), collapse = ", "),
+    ")).",
+    call. = FALSE
+  )
+}
+
+connection <- DBI::dbConnect(
+  odbc::odbc(),
+  Driver = Sys.getenv("MSSQL_DRIVER", "ODBC Driver 18 for SQL Server"),
+  Server = Sys.getenv("MSSQL_SERVER", "localhost\\SQLEXPRESS"),
+  Database = Sys.getenv("MSSQL_DATABASE", "tomawebp_oferta"),
+  Trusted_Connection = "Yes",
+  Encrypt = "Yes",
+  TrustServerCertificate = "Yes",
+  timeout = 10
+)
+
+data <- tryCatch(
+  {
+    offer <- DBI::dbGetQuery(
+      connection,
+      paste(
+        "SELECT id, ProductName, StockQty, UnitOfMeasure, VatRate,",
+        "NetPrice, GrossPrice, StockStatus, PriceStatus, VatStatus,",
+        "HasVatPriceMismatch, GrossPriceBand, GrossPriceBandSort,",
+        "InferredProductGroup, StockValueNet, StockValueGross, CreatedAt",
+        "FROM dbo.vw_Oferta_Analytics"
+      )
+    )
+
+    issues <- DBI::dbGetQuery(
+      connection,
+      paste(
+        "SELECT id, ProductName, StockQty, UnitOfMeasure, VatRate,",
+        "NetPrice, GrossPrice, StockStatus, PriceStatus, VatStatus,",
+        "GrossPriceDifference, DataQualityIssue",
+        "FROM dbo.vw_Oferta_DataQualityIssues"
+      )
+    )
+
+    history <- DBI::dbGetQuery(
+      connection,
+      paste(
+        "SELECT h.OfertaId, h.DataStanu, h.Ilosc, o.nazwa AS ProductName,",
+        "o.jm AS UnitOfMeasure FROM dbo.StanMagazynowyHistoria AS h",
+        "INNER JOIN dbo.Oferta AS o ON o.id = h.OfertaId",
+        "ORDER BY h.DataStanu, o.nazwa"
+      )
+    )
+
+    list(offer = offer, issues = issues, history = history)
+  },
+  finally = DBI::dbDisconnect(connection)
+)
+offer <- data$offer
+issues <- data$issues
+history <- data$history
+
+if (nrow(offer) == 0) {
+  stop("Widok dbo.vw_Oferta_Analytics nie zawiera produktów.", call. = FALSE)
+}
+
+total_products <- nrow(offer)
+products_with_stock <- sum(!is.na(offer$StockQty))
+products_without_stock <- sum(offer$StockStatus == "No stock data", na.rm = TRUE)
+total_gross_stock_value <- sum(offer$StockValueGross, na.rm = TRUE)
+vat_mismatches <- sum(offer$HasVatPriceMismatch, na.rm = TRUE)
+history_dates <- if (nrow(history)) length(unique(history$DataStanu)) else 0L
+stocked <- offer[!is.na(offer$StockQty) & !is.na(offer$UnitOfMeasure), , drop = FALSE]
+unit_summary <- stats::aggregate(StockQty ~ UnitOfMeasure, stocked, sum)
+unit_counts <- table(stocked$UnitOfMeasure)
+unit_summary$ProductCount <- as.integer(unit_counts[unit_summary$UnitOfMeasure])
+unit_summary <- unit_summary[c("UnitOfMeasure", "ProductCount", "StockQty")]
+names(unit_summary) <- c("Jednostka", "Produkty z ilością", "Łączna ilość")
+pieces <- stocked[stocked$UnitOfMeasure == "szt", , drop = FALSE]
+top_piece_stocks <- utils::head(pieces[order(pieces$StockQty, decreasing = TRUE), , drop = FALSE], 12)
+demo_source <- utils::head(pieces[order(pieces$StockQty, decreasing = TRUE), c("ProductName", "StockQty"), drop = FALSE], 4)
+demo_date <- max(as.Date(offer$CreatedAt), na.rm = TRUE)
+demo_dates <- rev(seq.Date(from = demo_date, by = "-1 month", length.out = 6))
+demo_factors <- matrix(c(
+  .83, .92, .89, 1.04, .96, 1,
+  1.12, 1.05, .91, .95, 1.08, 1,
+  .91, .80, .94, 1.06, .98, 1,
+  1.07, .95, 1.11, .89, .93, 1
+), nrow = 4, byrow = TRUE)
+demo_history <- do.call(rbind, lapply(seq_len(nrow(demo_source)), function(i) {
+  data.frame(Data = demo_dates, Produkt = demo_source$ProductName[i], Jednostka = "szt",
+    Ilosc = round(demo_source$StockQty[i] * demo_factors[i, ]), Typ = "Symulacja", stringsAsFactors = FALSE)
+}))
+in_stock_count <- sum(offer$StockStatus == "In stock", na.rm = TRUE)
+low_stock_count <- sum(offer$StockStatus == "Low stock", na.rm = TRUE)
+missing_stock_count <- sum(offer$StockStatus == "No stock data", na.rm = TRUE)
+other_group_count <- sum(offer$InferredProductGroup == "Other", na.rm = TRUE)
+water_stock_value <- sum(offer$StockValueGross[offer$InferredProductGroup == "Water"], na.rm = TRUE)
+median_gross_price <- stats::median(offer$GrossPrice, na.rm = TRUE)
+format_count <- function(x) format(x, big.mark = " ", scientific = FALSE, trim = TRUE)
+format_percent <- function(x, total = total_products) {
+  paste0(format(round(100 * x / total, 1), big.mark = " ", decimal.mark = ",", nsmall = 1), "%")
+}
+format_pln <- function(x) {
+  paste0(format(round(x, 0), big.mark = " ", decimal.mark = ",", scientific = FALSE), " zł")
+}
+format_pln_precise <- function(x) {
+  paste0(format(round(x, 2), big.mark = " ", decimal.mark = ",", nsmall = 2, scientific = FALSE), " zł")
+}
+
+stock_order <- c(
+  "In stock",
+  "Low stock",
+  "Out of stock",
+  "No stock data",
+  "Invalid stock"
+)
+stock_labels <- c(
+  "In stock" = "Na stanie",
+  "Low stock" = "Niski stan",
+  "Out of stock" = "Brak na stanie",
+  "No stock data" = "Brak danych",
+  "Invalid stock" = "Nieprawidłowa wartość"
+)
+stock_colors <- c(
+  "Na stanie" = "#198754",
+  "Niski stan" = "#f0ad4e",
+  "Brak na stanie" = "#dc3545",
+  "Brak danych" = "#6c757d",
+  "Nieprawidłowa wartość" = "#6610f2"
+)
+stock_counts <- as.data.frame(
+  table(factor(offer$StockStatus, levels = stock_order), useNA = "no")
+)
+names(stock_counts) <- c("Status", "Liczba produktów")
+stock_counts$Status <- unname(stock_labels[as.character(stock_counts$Status)])
+
+group_names <- offer$InferredProductGroup
+group_names[is.na(group_names) | group_names == ""] <- "Nieznana grupa"
+stock_value_by_group <- stats::aggregate(
+  offer$StockValueGross,
+  by = list(Grupa = group_names),
+  FUN = function(value) sum(value, na.rm = TRUE)
+)
+names(stock_value_by_group)[2] <- "Wartość brutto stanu (PLN)"
+stock_value_by_group <- stock_value_by_group[
+  order(stock_value_by_group[["Wartość brutto stanu (PLN)"]]),
+  ,
+  drop = FALSE
+]
+stock_value_by_group <- utils::tail(stock_value_by_group, 12)
+
+price_bands <- unique(offer[c("GrossPriceBand", "GrossPriceBandSort")])
+price_bands <- price_bands[
+  order(price_bands$GrossPriceBandSort),
+  ,
+  drop = FALSE
+]
+price_band_counts <- as.data.frame(
+  table(factor(offer$GrossPriceBand, levels = price_bands$GrossPriceBand))
+)
+names(price_band_counts) <- c("Przedział ceny brutto", "Liczba produktów")
+
+missing_stock <- offer[
+  !is.na(offer$StockStatus) & offer$StockStatus == "No stock data",
+  c("id", "ProductName", "UnitOfMeasure", "NetPrice", "GrossPrice"),
+  drop = FALSE
+]
+missing_stock <- missing_stock[
+  order(missing_stock$ProductName, na.last = TRUE),
+  ,
+  drop = FALSE
+]
+
+lowest_stock <- offer[!is.na(offer$StockQty), , drop = FALSE]
+lowest_stock <- lowest_stock[
+  order(lowest_stock$StockQty, lowest_stock$ProductName, na.last = TRUE),
+  c("id", "ProductName", "StockQty", "UnitOfMeasure", "GrossPrice", "StockStatus"),
+  drop = FALSE
+]
+lowest_stock <- utils::head(lowest_stock, 100)
+```
+
+# Przegląd
+
+## Row {height=18%}
+
+```{r}
+#| content: valuebox
+#| title: Produkty w ofercie
+#| color: primary
+format(total_products, big.mark = " ")
+```
+
+```{r}
+#| content: valuebox
+#| title: Z podanym stanem
+#| color: success
+format(products_with_stock, big.mark = " ")
+```
+
+```{r}
+#| content: valuebox
+#| title: Bez danych o stanie
+#| color: warning
+format(products_without_stock, big.mark = " ")
+```
+
+```{r}
+#| content: valuebox
+#| title: Szacunkowa wartość stanu
+#| color: info
+paste0(format(round(total_gross_stock_value, 0), big.mark = " ", decimal.mark = ","), " zł")
+```
+
+## Row {height=40%}
+
+### Column {width=48%}
+
+```{r}
+#| title: Dostępność produktów
+stock_plot <- plotly::plot_ly(
+  stock_counts,
+  x = ~`Liczba produktów`,
+  y = ~stats::reorder(Status, `Liczba produktów`),
+  type = "bar",
+  orientation = "h",
+  marker = list(color = unname(stock_colors[as.character(stock_counts$Status)])),
+  text = ~`Liczba produktów`,
+  textposition = "outside",
+  hovertemplate = "%{y}<br>%{x} produktów<extra></extra>"
+)
+plotly::layout(stock_plot,
+  xaxis = list(title = NULL, rangemode = "tozero", gridcolor = "#e9eef5"),
+  yaxis = list(title = NULL), showlegend = FALSE,
+  margin = list(l = 125, r = 35, t = 20, b = 35),
+  paper_bgcolor = "transparent", plot_bgcolor = "transparent"
+)
+```
+
+### Column {width=52%}
+
+```{r}
+#| title: Szacunkowa wartość stanu według grup
+group_plot <- plotly::plot_ly(
+  stock_value_by_group,
+  x = ~`Wartość brutto stanu (PLN)`,
+  y = ~stats::reorder(Grupa, `Wartość brutto stanu (PLN)`),
+  type = "bar", orientation = "h",
+  marker = list(color = "#2878b5"),
+  hovertemplate = "%{y}<br>%{x:,.2f} zł<extra></extra>"
+)
+plotly::layout(group_plot,
+  xaxis = list(title = "Wartość brutto (zł)", tickformat = ",.0f", gridcolor = "#e9eef5"),
+  yaxis = list(title = NULL),
+  margin = list(l = 155, r = 25, t = 20, b = 45),
+  paper_bgcolor = "transparent", plot_bgcolor = "transparent"
+)
+```
+
+## Row {height=42%}
+
+### Column {width=64%}
+
+```{r}
+#| title: Rozkład cen brutto
+price_data <- offer[!is.na(offer$GrossPrice) & offer$GrossPrice > 0, , drop = FALSE]
+price_plot <- plotly::plot_ly(
+  price_data, x = ~GrossPrice, type = "histogram",
+  xbins = list(size = 5), marker = list(color = "#58a3a0"),
+  hovertemplate = "Cena: %{x:.2f} zł<br>Produktów: %{y}<extra></extra>"
+)
+plotly::layout(price_plot,
+  xaxis = list(title = "Cena brutto (zł)", tickprefix = "zł ", gridcolor = "#e9eef5"),
+  yaxis = list(title = "Liczba produktów", rangemode = "tozero", gridcolor = "#e9eef5"),
+  bargap = 0.08, showlegend = FALSE,
+  margin = list(l = 65, r = 20, t = 20, b = 50),
+  paper_bgcolor = "transparent", plot_bgcolor = "transparent"
+)
+```
+
+### Column {width=36%}
+
+```{r}
+#| title: Historia stanów
+if (history_dates == 0) {
+  htmltools::div(class = "history-empty",
+    htmltools::div(class = "history-empty-icon", "—"),
+    htmltools::h3("Brak punktów historii"),
+    htmltools::p("Historia SQL zawiera 0 zapisów. Strona „Historia” pokazuje osobną, wyraźnie oznaczoną symulację do demonstracji wykresu."),
+    htmltools::p(class = "history-meta", "Wcześniejsze punkty symulacji nie są pomiarami z bazy.")
+  )
+} else {
+  htmltools::div(class = "history-empty",
+    htmltools::h3(paste(history_dates, "dat z historią")),
+    htmltools::p(paste("Zakres:", format(min(history$DataStanu)), "—", format(max(history$DataStanu))))
+  )
+}
+```
+
+## Row
+
+```{r}
+#| title: Co wynika z danych?
+htmltools::div(class = "insight-summary",
+  htmltools::div(class = "insight-item",
+    htmltools::div(class = "insight-label", "Pokrycie stanów"),
+    htmltools::p(htmltools::strong(paste0(format_count(in_stock_count), " produktów (", format_percent(in_stock_count), ")")),
+      " ma stan dodatni. ", format_count(low_stock_count), " pozycji ma niski stan według progu widoku (<10 jednostek). Brakuje ilości dla ",
+      format_count(missing_stock_count), " produktów (", format_percent(missing_stock_count), "). Brak danych nie oznacza stanu zerowego.")
+  ),
+  htmltools::div(class = "insight-item",
+    htmltools::div(class = "insight-label", "Wartość zapasu"),
+    htmltools::p("Szacunkowa wartość brutto znanych stanów wynosi ", htmltools::strong(format_pln(total_gross_stock_value)),
+      ". Woda odpowiada za około ", format_percent(water_stock_value, total_gross_stock_value), " tej wartości według grupy wywnioskowanej z nazwy produktu.")
+  ),
+  htmltools::div(class = "insight-item",
+    htmltools::div(class = "insight-label", "Ceny i VAT"),
+    htmltools::p("Mediana ceny brutto to ", htmltools::strong(format_pln_precise(median_gross_price)),
+      ". Niezgodność ceny brutto z wyliczeniem VAT wykryto w ", format_count(vat_mismatches), " produktach (",
+      format_percent(vat_mismatches), ").")
+  ),
+  htmltools::div(class = "insight-item insight-caveat",
+    htmltools::div(class = "insight-label", "Ograniczenia interpretacji"),
+    htmltools::p("Grupa „Inne” obejmuje ", format_count(other_group_count), " produktów (", format_percent(other_group_count),
+      "), więc podział kategorii jest mało precyzyjny. Historia SQL jest pusta — nie można ocenić rzeczywistych zmian zapasu. Strona „Historia” zawiera wyłącznie symulację. Jednostki produktów są różne, dlatego niski stan należy czytać zgodnie z jednostką produktu.")
+  )
+)
+```
+
+# Produkty
+
+## Row
+
+```{r}
+#| title: Katalog produktów
+products_table <- offer[, c("id", "ProductName", "InferredProductGroup", "StockQty", "UnitOfMeasure", "NetPrice", "GrossPrice", "StockStatus")]
+products_table$StockStatus <- unname(stock_labels[as.character(products_table$StockStatus)])
+names(products_table) <- c("ID", "Produkt", "Grupa", "Stan", "Jednostka", "Netto (zł)", "Brutto (zł)", "Dostępność")
+DT::datatable(products_table, rownames = FALSE, filter = "top",
+  options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE, order = list(list(1, "asc")))) |>
+  DT::formatRound(c("Stan", "Netto (zł)", "Brutto (zł)"), 2, mark = " ", dec.mark = ",")
+```
+
+# Ilości
+
+## Row {height=20%}
+
+```{r}
+#| content: valuebox
+#| title: Pozycje z ilością
+#| color: primary
+paste0(format_count(nrow(stocked)), " / ", format_count(total_products))
+```
+
+```{r}
+#| content: valuebox
+#| title: Jednostki miary
+#| color: info
+paste(sort(unique(stocked$UnitOfMeasure)), collapse = " · ")
+```
+
+## Row {height=65%}
+
+### Column {width=60%}
+
+```{r}
+#| title: Największe stany produktów (szt.)
+quantity_plot <- plotly::plot_ly(
+  top_piece_stocks,
+  x = ~StockQty,
+  y = ~stats::reorder(ProductName, StockQty),
+  type = "bar", orientation = "h",
+  marker = list(color = "#3478c7"),
+  hovertemplate = "%{y}<br>%{x:,.0f} szt.<extra></extra>"
+)
+plotly::layout(quantity_plot,
+  xaxis = list(title = "Stan (szt.)", tickformat = ",.0f", rangemode = "tozero", gridcolor = "#e9eef5"),
+  yaxis = list(title = NULL), margin = list(l = 240, r = 35, t = 20, b = 45),
+  paper_bgcolor = "transparent", plot_bgcolor = "transparent"
+)
+```
+
+### Column {width=40%}
+
+```{r}
+#| title: Ilości rozdzielone według jednostki
+DT::datatable(unit_summary, rownames = FALSE, options = list(dom = "t", pageLength = 10)) |>
+  DT::formatRound("Łączna ilość", 1, mark = " ", dec.mark = ",")
+```
+
+# Jakość danych
+
+## Row {height=15%}
+
+```{r}
+#| content: valuebox
+#| title: Pozycje wymagające uwagi
+#| color: warning
+format(nrow(issues), big.mark = " ")
+```
+
+```{r}
+#| content: valuebox
+#| title: Niezgodności ceny i VAT
+#| color: danger
+format(vat_mismatches, big.mark = " ")
+```
+
+## Row
+
+```{r}
+#| title: Szczegóły kontroli
+if (nrow(issues) == 0) {
+  htmltools::p("Nie znaleziono pozycji wymagających uwagi.")
+} else {
+  issues <- issues[order(issues$DataQualityIssue, issues$ProductName, issues$id, na.last = TRUE), , drop = FALSE]
+  issues$StockStatus <- unname(stock_labels[as.character(issues$StockStatus)])
+  issue_code <- as.character(issues$DataQualityIssue)
+  issue_area <- ifelse(issue_code %in% c("Missing product name", "Duplicate name"), "Product",
+    ifelse(grepl("VAT", issue_code, ignore.case = TRUE), "VAT",
+      ifelse(grepl("price", issue_code, ignore.case = TRUE), "Price", "Stock")))
+  issues$DataQualityArea <- unname(c(Product = "Produkt", Price = "Cena", VAT = "VAT", Stock = "Magazyn")[issue_area])
+  issues$DataQualityIssue <- unname(c(
+    "Missing product name" = "Brak nazwy produktu", "Missing price" = "Brak ceny",
+    "Invalid price" = "Nieprawidłowa cena", "Invalid VAT" = "Nieprawidłowy VAT",
+    "Unusual VAT" = "Nietypowa stawka VAT",
+    "Gross price differs from net price + VAT" = "Cena brutto różni się od netto + VAT",
+    "No stock data" = "Brak danych o stanie", "Out of stock" = "Brak na stanie",
+    "Invalid stock" = "Nieprawidłowy stan", "Duplicate name" = "Duplikat produktu"
+  )[issue_code])
+  names(issues) <- c("ID", "Produkt", "Stan", "Jednostka", "VAT (%)", "Netto (zł)", "Brutto (zł)",
+    "Dostępność", "Status ceny", "Status VAT", "Różnica brutto (zł)", "Problem", "Obszar")
+  DT::datatable(issues, rownames = FALSE, filter = "top",
+    options = list(pageLength = 15, scrollX = TRUE, autoWidth = FALSE))
+}
+```
+
+# Historia
+
+## Row {height=18%}
+
+```{r}
+#| title: Ważne — dane demonstracyjne
+htmltools::div(class = "simulation-banner",
+  htmltools::strong("SYMULACJA — NIE HISTORIA Z BAZY"),
+  htmltools::p("Tabela dbo.StanMagazynowyHistoria jest pusta. Wcześniejsze punkty poniższego wykresu zostały syntetycznie wygenerowane na potrzeby prezentacji. Ostatni punkt odpowiada ilości ze zrzutu oferty; wcześniejsze miesiące są przykładowe i nie mogą służyć do decyzji magazynowych.")
+)
+```
+
+## Row {height=60%}
+
+```{r}
+#| title: Przykładowy przebieg stanów dla wybranych produktów (szt.)
+demo_plot <- plotly::plot_ly()
+for (i in seq_len(nrow(demo_source))) {
+  demo_plot <- plotly::add_trace(demo_plot,
+    x = demo_dates,
+    y = round(demo_source$StockQty[i] * demo_factors[i, ]),
+    type = "scatter", mode = "lines+markers",
+    name = demo_source$ProductName[i],
+    hovertemplate = "%{x|%m.%Y}<br>%{y:,.0f} szt.<extra>%{fullData.name}</extra>"
+  )
+}
+plotly::layout(demo_plot,
+  xaxis = list(title = "Miesiąc", tickformat = "%b %Y"),
+  yaxis = list(title = "Ilość (szt.)", rangemode = "tozero", tickformat = ",.0f", gridcolor = "#e9eef5"),
+  hovermode = "x unified", legend = list(orientation = "h", y = -0.2),
+  paper_bgcolor = "transparent", plot_bgcolor = "transparent"
+)
+```
+
+## Row
+
+```{r}
+#| title: Wartości pokazane w symulacji
+DT::datatable(demo_history, rownames = FALSE,
+  options = list(pageLength = 12, scrollX = TRUE, order = list(list(0, "asc"))))
+```
